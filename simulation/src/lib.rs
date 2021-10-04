@@ -128,6 +128,37 @@ impl DynamicsParameters {
             epsilon: self.epsilon,
         }
     }
+
+    pub fn cap_m(&self) -> f64 {
+        -1.0 - 1.5 * self.cap_a / self.cap_b
+    }
+
+    pub fn alpha(&self) -> f64 {
+        let cap_m = self.cap_m();
+        let cap_a = self.cap_a;
+        let cap_b = self.cap_b;
+        let cap_c = self.cap_c;
+        let minus_4_over_cap_a = -4.0 / cap_a;
+
+        let horner = cap_a / 4.0;
+        let horner = horner * cap_m + 0.75 * cap_a + 0.5 * cap_b;
+        let horner = horner * cap_m * minus_4_over_cap_a + 0.75 * cap_a + cap_b + cap_c;
+        let horner = horner * cap_m + 0.25 * cap_a + 0.5 * cap_b + cap_c;
+        horner
+    }
+
+    pub fn beta(&self) -> f64 {
+        let cap_m = self.cap_m();
+        let cap_a = self.cap_a;
+        let cap_b = self.cap_b;
+        let cap_c = self.cap_c;
+        let minus_4_over_cap_a = -4.0 / cap_a;
+
+        let horner = 0.75;
+        let horner = horner * cap_m + 1.5 * cap_a + cap_b;
+        let horner = horner * cap_m + 0.75 * cap_a + cap_b + cap_c;
+        horner * minus_4_over_cap_a
+    }
 }
 
 #[pyclass]
@@ -169,7 +200,7 @@ impl DynamicsEquation {
         let horner = horner * y + self.quadratic_coef;
         let horner = horner * y + self.linear_coef;
         let horner = horner * y + self.free_coef;
-        (horner + self.epsilon * white_noise_value) * dt
+        horner * dt + self.epsilon * white_noise_value
     }
 }
 
@@ -202,7 +233,7 @@ impl DynamicsProcess {
     pub fn step(&mut self, dt: f64) {
         let white_noise_value = self.rng.sample(StandardNormal);
         let dy = self.equation.compute_dy(self.y, dt, white_noise_value);
-        self.y = (self.y + dy).clamp(-2.0, 1.0);
+        self.y = (self.y + dy).clamp(-1.0, 1.0);
         self.t += dt;
         assert!(self.y.is_finite());
     }

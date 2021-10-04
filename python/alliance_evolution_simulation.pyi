@@ -50,6 +50,15 @@ class DynamicsParameters:
     def make_equation(self) -> 'DynamicsEquation':
         ...
 
+    def alpha(self) -> float:
+        ...
+
+    def beta(self) -> float:
+        ...
+
+    def cap_m(self) -> float:
+        ...
+
     cap_a: float
     cap_b: float
     cap_c: float

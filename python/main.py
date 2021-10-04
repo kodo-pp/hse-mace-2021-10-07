@@ -12,29 +12,30 @@ def plot_cubic_parabola(eq: sim.DynamicsEquation):
     plt.plot([1.0, 1.0], [min(dys) - 1, max(dys) + 1], 'red')
     plt.show()
 
-
-for a in np.linspace(6.5, 8.5, 10):
+min_a = 2
+max_a = 6
+for a in np.linspace(2, 6, 11):
     params = sim.GameParameters(
         a=a,
-        b=2,
-        c=7,
-        d=3.5,
-        delta=1,
-        alpha1=0.15,
-        alpha2=0.15,
-        beta1=0.2,
-        beta2=0.2,
+        b=1,
+        c=4,
+        d=6,
+        delta=3,
+        alpha1=0,
+        alpha2=0,
+        beta1=0,
+        beta2=0,
     )
 
-    eq = params.compute_dynamics_params(epsilon=3).make_equation()
-    plot_cubic_parabola(eq)
+    eq = params.compute_dynamics_params(epsilon=0.01).make_equation()
+    #plot_cubic_parabola(eq)
     #print(eq)
     proc = sim.DynamicsProcess(eq, y0=1.0)
-    conv = proc.test_convergence(10000, dt=0.001)
+    conv = proc.test_convergence(40000, dt=0.001)
     print(f'{conv.alliance_failed} for a = {a}')
     history = conv.history()
-    ts = [p.t for p in history]
-    ys = [p.y for p in history]
-    #plt.plot(ts, ys)
+    ys = [p.y for p in history[::]]
+    ts = [p.t for p in history[::]]
+    plt.plot(ts, ys, color=((a - min_a) / (max_a - min_a), 0.5, 0), linewidth=0.5)
 
 plt.show()
