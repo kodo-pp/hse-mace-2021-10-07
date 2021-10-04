@@ -202,7 +202,7 @@ impl DynamicsProcess {
     pub fn step(&mut self, dt: f64) {
         let white_noise_value = self.rng.sample(StandardNormal);
         let dy = self.equation.compute_dy(self.y, dt, white_noise_value);
-        self.y = (self.y + dy).clamp(-1.0, 1.0);
+        self.y = (self.y + dy).clamp(-2.0, 1.0);
         self.t += dt;
         assert!(self.y.is_finite());
     }
