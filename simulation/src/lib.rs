@@ -212,15 +212,22 @@ pub struct DynamicsProcess {
     t: f64,
     y: f64,
     rng: Box<dyn RngCore + Send>,
+    clamp: bool,
 }
 
 impl DynamicsProcess {
-    pub fn new(equation: DynamicsEquation, y0: f64, rng: Box<dyn RngCore + Send>) -> Self {
+    pub fn new(
+        equation: DynamicsEquation,
+        y0: f64,
+        rng: Box<dyn RngCore + Send>,
+        clamp: bool,
+    ) -> Self {
         Self {
             equation,
             rng,
             t: 0.0,
             y: y0,
+            clamp,
         }
     }
 }
@@ -228,16 +235,22 @@ impl DynamicsProcess {
 #[pymethods]
 impl DynamicsProcess {
     #[new]
-    pub fn with_thread_rng(equation: DynamicsEquation, y0: f64) -> Self {
-        Self::new(equation, y0, Box::new(rand::rngs::OsRng))
+    pub fn with_thread_rng(equation: DynamicsEquation, y0: f64, clamp: bool) -> Self {
+        Self::new(equation, y0, Box::new(rand::rngs::OsRng), clamp)
     }
 
     pub fn step(&mut self, dt: f64) {
         let white_noise_value = self.rng.sample(StandardNormal);
         let dy = self.equation.compute_dy(self.y, dt, white_noise_value);
-        self.y = (self.y + dy).clamp(-1.0, 1.0);
-        self.t += dt;
+        self.y = self.y + dy;
+        if self.clamp {
+            self.y = self.y.clamp(-1.0, 1.0);
+        } else {
+            // For purposes of numerical stability.
+            self.y = self.y.clamp(-100.0, 100.0);
+        }
         assert!(self.y.is_finite());
+        self.t += dt;
     }
 
     pub fn y(&self) -> f64 {
@@ -276,12 +289,14 @@ fn run_convertence_test_for_all(
     num_steps: usize,
     dt: f64,
     y0: f64,
+    clamp: bool,
 ) -> Vec<ConvergenceResults> {
-    let mut counter = AtomicUsize::new(0);
+    let counter = AtomicUsize::new(0);
     let total = eqs.len();
-    let result = eqs.into_par_iter()
+    let result = eqs
+        .into_par_iter()
         .map(|eq| {
-            let result = DynamicsProcess::new(eq, y0, Box::new(rand::rngs::OsRng))
+            let result = DynamicsProcess::new(eq, y0, Box::new(rand::rngs::OsRng), clamp)
                 .test_convergence(num_steps, dt);
             let num_done = counter.fetch_add(1, Ordering::Relaxed);
             eprint!("\r[{}/{}]\x1b[K", num_done, total);

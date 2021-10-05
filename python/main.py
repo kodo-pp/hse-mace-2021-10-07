@@ -18,34 +18,6 @@ def plot_cubic_parabola(eq: sim.DynamicsEquation) -> None:
     plt.plot([1.0, 1.0], [min(dys) - 1, max(dys) + 1], 'red')
     plt.show()
 
-#min_a = 2
-#max_a = 6
-#for a in np.linspace(2, 6, 11):
-#    params = sim.GameParameters(
-#        a=a,
-#        b=1,
-#        c=4,
-#        d=6,
-#        delta=3,
-#        alpha1=0,
-#        alpha2=0,
-#        beta1=0,
-#        beta2=0,
-#    )
-#
-#    eq = params.compute_dynamics_params(epsilon=0.01).make_equation()
-#    #plot_cubic_parabola(eq)
-#    #print(eq)
-#    proc = sim.DynamicsProcess(eq, y0=1.0)
-#    conv = proc.test_convergence(40000, dt=0.001)
-#    print(f'{conv.alliance_failed} for a = {a}')
-#    history = conv.history()
-#    ys = [p.y for p in history[::]]
-#    ts = [p.t for p in history[::]]
-#    plt.plot(ts, ys, color=((a - min_a) / (max_a - min_a), 0.5, 0), linewidth=0.5)
-#
-#plt.show()
-
 @dataclass
 class ParamValueTuple:
     a: float
@@ -91,7 +63,7 @@ def catastrophe_scatterplot(
     outcomes = []
     params_noise = random_distribution((num_points, len(reference_params)))
     scaled_params_noise = params_noise @ np.diagflat(noise_scale.as_array())
-    params_array = reference_params.as_array() + scaled_params_noise
+    params_array = reference_params.as_array() + scaled_params_noise * 5
     num_outliers = 0
 
     for i in trange(num_points):
@@ -117,7 +89,7 @@ def catastrophe_scatterplot(
             num_outliers += 1
             continue
 
-        proc = sim.DynamicsProcess(dynamics_params.make_equation(), y0=y0)
+        proc = sim.DynamicsProcess(dynamics_params.make_equation(), y0=y0, clamp=True)
         alliance_failed = proc.test_convergence(num_steps=num_steps, dt=dt).alliance_failed
         outcomes.append((alpha, beta, alliance_failed))
 
@@ -151,19 +123,20 @@ def do_scatter(num_points) -> None:
         noise_scale=ParamValueTuple(
             a=0.8,
             b=0.3,
-            c=0.1,
+            c=0.3,
             d=0.3,
             delta=0.1,
-            alpha1=0.0,
-            alpha2=0.0,
-            beta1=0.0,
-            beta2=0.0,
+            alpha1=0.3,
+            alpha2=0.3,
+            beta1=0.3,
+            beta2=0.3,
         ),
-        epsilon=0.01,
-        num_steps=4000,
+        epsilon=0.0,
+        num_steps=1000,
         dt=0.003,
-        y0=-1.0,
-        beta_outlier_threshold=3,
+        y0=0.99,
+        random_distribution=lambda size: np.random.uniform(-1, 1, size=size)
+        #beta_outlier_threshold=3,
     )
     plt.xlabel(r'$\alpha$')
     # Thanks to https://stackoverflow.com/a/27671918.
@@ -174,14 +147,82 @@ def do_scatter(num_points) -> None:
         [mpatches.Patch(color='green'), mpatches.Patch(color='red')],
         ['Alliance didn\'t fail', 'Alliance failed'],
     )
+    x = np.linspace(-40, 40, 5000)
+    y = (27/4 * x**2)**(1/3)
+    plt.plot(x, y, color='black')
+    plt.plot(x, -y, color='gray')
     plt.show()
+
+def do_dynamics_plot(a_values, epsilon: float, clamp: bool = False) -> None:
+    min_a = min(a_values)
+    max_a = max(a_values)
+    legend_handles = []
+    legend_labels = []
+    max_ts = 0
+    for a in a_values:
+        params = sim.GameParameters(
+            a=a,
+            b=1,
+            c=4,
+            d=6,
+            delta=3,
+            alpha1=0,
+            alpha2=0,
+            beta1=0,
+            beta2=0,
+        )
+
+        eq = params.compute_dynamics_params(epsilon=epsilon).make_equation()
+        proc = sim.DynamicsProcess(eq, y0=-1.0, clamp=clamp)
+        conv = proc.test_convergence(10000, dt=0.003)
+        history = conv.history()
+        ys = [p.y for p in history]
+        ts = [p.t for p in history]
+        [h] = plt.plot(ts, ys, linewidth=1)
+        max_ts = max(max_ts, max(ts))
+        legend_handles.append(h)
+        legend_labels.append(f'a = {a}')
+
+    plt.legend(legend_handles, legend_labels)
+    plt.plot([0, max_ts], [1, 1], color='black')
+    plt.plot([0, max_ts], [-1, -1], color='black')
+    plt.show()
+
 
 def parse_args() -> Namespace:
     ap = ArgumentParser()
     sub = ap.add_subparsers(required=True, dest='command')
 
     sub_scatter = sub.add_parser('scatter', help='Draw a catastrophe scatter plot.')
-    sub_scatter.add_argument('num_points', type=int, help='Number of points to consider.')
+    sub_scatter.add_argument(
+        'num_points',
+        type=int,
+        help='Number of points to consider.',
+    )
+
+    sub_dynamics = sub.add_parser(
+        'dynamics',
+        help='Draw dynamics plots for certain values of `a`.',
+    )
+    sub_dynamics.add_argument(
+        'a',
+        type=float,
+        nargs='+',
+        help='Values for which to plot the dynamics.',
+    )
+    sub_dynamics.add_argument(
+        '--epsilon',
+        '-e',
+        '-ε',
+        default=0.01,
+        type=float,
+        help='Magnitude of noise.',
+    )
+    sub_dynamics.add_argument(
+        '--disable-tight-clamping',
+        action='store_true',
+        help='Disable tight clamping (can lead to Y getting far away from [-1, 1])',
+    )
 
     return ap.parse_args()
 
@@ -189,6 +230,12 @@ def main() -> None:
     args = parse_args()
     if args.command == 'scatter':
         do_scatter(num_points=args.num_points)
+    if args.command == 'dynamics':
+        do_dynamics_plot(
+            a_values=args.a,
+            epsilon=args.epsilon,
+            clamp=not args.disable_tight_clamping,
+        )
 
 if __name__ == '__main__':
     main()

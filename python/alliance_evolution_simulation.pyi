@@ -86,7 +86,7 @@ class DynamicsEquation:
     epsilon: float
 
 class DynamicsProcess:
-    def __init__(self, equation: 'DynamicsEquation', y0: float) -> None:
+    def __init__(self, equation: 'DynamicsEquation', y0: float, clamp: bool) -> None:
         ...
 
     def step(self, dt: float) -> None:
@@ -122,5 +122,6 @@ def run_convertence_test_for_all(
     num_steps: int,
     dt: float,
     y0: float,
+    clamp: bool,
 ) -> List['ConvergenceResults']:
     ...
