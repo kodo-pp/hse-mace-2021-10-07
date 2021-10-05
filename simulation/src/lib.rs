@@ -2,6 +2,8 @@ use pyo3::class::PyObjectProtocol;
 use pyo3::prelude::*;
 use rand::{Rng, RngCore};
 use rand_distr::StandardNormal;
+use rayon::prelude::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[pyclass]
 #[derive(Debug, Copy, Clone)]
@@ -260,12 +262,34 @@ impl DynamicsProcess {
             t: self.t,
             y: self.y,
         });
-        let alliance_failed = self.y < 0.0;
+        let alliance_failed = self.y > 0.0;
         ConvergenceResults {
             history,
             alliance_failed,
         }
     }
+}
+
+#[pyfunction]
+fn run_convertence_test_for_all(
+    eqs: Vec<DynamicsEquation>,
+    num_steps: usize,
+    dt: f64,
+    y0: f64,
+) -> Vec<ConvergenceResults> {
+    let mut counter = AtomicUsize::new(0);
+    let total = eqs.len();
+    let result = eqs.into_par_iter()
+        .map(|eq| {
+            let result = DynamicsProcess::new(eq, y0, Box::new(rand::rngs::OsRng))
+                .test_convergence(num_steps, dt);
+            let num_done = counter.fetch_add(1, Ordering::Relaxed);
+            eprint!("\r[{}/{}]\x1b[K", num_done, total);
+            result
+        })
+        .collect();
+    eprintln!("Done\x1b[K");
+    result
 }
 
 impl std::fmt::Debug for DynamicsProcess {
@@ -307,7 +331,10 @@ pub struct ConvergenceResults {
 impl ConvergenceResults {
     #[new]
     pub fn new(alliance_failed: bool, history: Vec<HistoryPoint>) -> Self {
-        Self { alliance_failed, history }
+        Self {
+            alliance_failed,
+            history,
+        }
     }
 
     pub fn history(&self) -> Vec<HistoryPoint> {
@@ -341,5 +368,6 @@ fn alliance_evolution_simulation(_py: Python, module: &PyModule) -> PyResult<()>
     module.add_class::<DynamicsProcess>()?;
     module.add_class::<ConvergenceResults>()?;
     module.add_class::<HistoryPoint>()?;
+    module.add_function(wrap_pyfunction!(run_convertence_test_for_all, module)?)?;
     Ok(())
 }

@@ -116,3 +116,11 @@ class HistoryPoint:
 
     t: float
     y: float
+
+def run_convertence_test_for_all(
+    eqs: List['DynamicsEquation'],
+    num_steps: int,
+    dt: float,
+    y0: float,
+) -> List['ConvergenceResults']:
+    ...
