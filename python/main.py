@@ -41,7 +41,7 @@ def plot_cubic_parabola(eq: sim.DynamicsEquation):
 #
 #plt.show()
 
-outcomes = {True: ([], []), False: ([], [])}
+outcomes = []
 num_points = 10000
 ref_params = np.array([4.8, 1.5, 4, 8, 3])
 params_array = ref_params + np.random.normal(
@@ -73,11 +73,16 @@ for i in trange(num_points):
         continue
     proc = sim.DynamicsProcess(dyn_params.make_equation(), y0=-1.0)
     alliance_failed = proc.test_convergence(4000, dt=0.003).alliance_failed
-    outcomes[alliance_failed][0].append(alpha)
-    outcomes[alliance_failed][1].append(beta)
+    outcomes.append((alpha, beta, alliance_failed))
 
-plt.scatter(*outcomes[True], color='red', marker='.', alpha=0.3)
-plt.scatter(*outcomes[False], color='green', marker='.', alpha=0.3)
+outcomes = np.array(outcomes)
+plt.scatter(
+    outcomes[:, 0],
+    outcomes[:, 1],
+    color=['red' if failed else 'green' for failed in outcomes[:, 2]],
+    marker='.',
+    alpha=0.3,
+)
 plt.show()
 
 #arr = np.array(outcomes[False])
