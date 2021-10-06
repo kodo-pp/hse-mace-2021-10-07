@@ -9,14 +9,15 @@ from dataclasses import dataclass
 from tqdm import trange
 from typing import Optional, Callable, Tuple, Dict, Any, NoReturn
 
-def plot_cubic_parabola(eq: sim.DynamicsEquation) -> None:
+def plot_cubic_parabola(eq: sim.DynamicsEquation):
     xs = np.linspace(-1.5, 1.5, 1000)
     dys = [eq.compute_dy(x, 1, 0) for x in xs]
-    plt.plot(xs, dys)
-    plt.plot([-1.5, 1.5], [0, 0], 'red')
-    plt.plot([-1.0, -1.0], [min(dys) - 1, max(dys) + 1], 'red')
-    plt.plot([1.0, 1.0], [min(dys) - 1, max(dys) + 1], 'red')
-    plt.show()
+    return plt.plot(xs, dys)
+
+def plot_cubic_parabola_rules():
+    plt.plot([-1.5, 1.5], [0, 0], 'gray')
+    plt.plot([-1.0, -1.0], [-10, 10], 'gray')
+    plt.plot([1.0, 1.0], [-10, 10], 'gray')
 
 @dataclass
 class ParamValueTuple:
@@ -188,6 +189,43 @@ def do_dynamics_plot(a_values, epsilon: float, clamp: bool = False) -> None:
     plt.plot([0, max_ts], [-1, -1], color='black')
     plt.show()
 
+def do_ddy_plot(a_values, alt: bool) -> None:
+    legend_handles = []
+    legend_labels = []
+    plot_cubic_parabola_rules()
+    for a in a_values:
+        if alt:
+            params = sim.GameParameters(
+                a=a,
+                b=2,
+                c=7,
+                d=3.5,
+                delta=1,
+                alpha1=0.15,
+                alpha2=0.15,
+                beta1=0.2,
+                beta2=0.2,
+            )
+        else:
+            params = sim.GameParameters(
+                a=a,
+                b=1,
+                c=4,
+                d=6,
+                delta=3,
+                alpha1=0,
+                alpha2=0,
+                beta1=0,
+                beta2=0,
+            )
+
+        eq = params.compute_dynamics_params(epsilon=0).make_equation()
+        [h] = plot_cubic_parabola(eq)
+        legend_handles.append(h)
+        legend_labels.append(f'a = {a}')
+
+    plt.legend(legend_handles, legend_labels)
+    plt.show()
 
 def parse_args() -> Namespace:
     ap = ArgumentParser()
@@ -224,6 +262,22 @@ def parse_args() -> Namespace:
         help='Disable tight clamping (can lead to Y getting far away from [-1, 1])',
     )
 
+    sub_ddy = sub.add_parser(
+        'ddy',
+        help='Draw plots for the deterministic part of `dy` for different `a`',
+    )
+    sub_ddy.add_argument(
+        'a',
+        type=float,
+        nargs='+',
+        help='Values for which to draw the plot.',
+    )
+    sub_ddy.add_argument(
+        '--alt',
+        action='store_true',
+        help='Use alternative parameter set',
+    )
+
     return ap.parse_args()
 
 def main() -> None:
@@ -236,6 +290,8 @@ def main() -> None:
             epsilon=args.epsilon,
             clamp=not args.disable_tight_clamping,
         )
+    if args.command == 'ddy':
+        do_ddy_plot(a_values=args.a, alt=args.alt)
 
 if __name__ == '__main__':
     main()
