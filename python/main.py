@@ -14,6 +14,17 @@ def plot_cubic_parabola(eq: sim.DynamicsEquation):
     dys = [eq.compute_dy(x, 1, 0) for x in xs]
     return plt.plot(xs, dys)
 
+def plot_cubic_parabola_integral(
+    eq: sim.DynamicsEquation,
+    dt: float,
+    offset: float,
+    invert: bool = False,
+):
+    xs = np.linspace(-1.5, 1.5, 1000)
+    dys = [eq.compute_dy(x, 1, 0) for x in xs]
+    integrals = (-1 if invert else 1) * np.cumsum(dys) * dt + offset
+    return plt.plot(xs, integrals)
+
 def plot_cubic_parabola_rules():
     plt.plot([-1.5, 1.5], [0, 0], 'gray')
     plt.plot([-1.0, -1.0], [-10, 10], 'gray')
@@ -187,44 +198,58 @@ def do_dynamics_plot(a_values, epsilon: float, clamp: bool = False) -> None:
     plt.legend(legend_handles, legend_labels)
     plt.plot([0, max_ts], [1, 1], color='black')
     plt.plot([0, max_ts], [-1, -1], color='black')
+    plt.xlabel(r'$t$')
+    plt.ylabel(r'$y$', rotation=0)
     plt.show()
 
-def do_ddy_plot(a_values, alt: bool) -> None:
+def do_ddy_plot(
+    a: float,
+    alt: bool,
+    invert: bool,
+    dt: float,
+    offset: float,
+    min_dydt: float,
+    max_dydt: float,
+) -> None:
     legend_handles = []
     legend_labels = []
     plot_cubic_parabola_rules()
-    for a in a_values:
-        if alt:
-            params = sim.GameParameters(
-                a=a,
-                b=2,
-                c=7,
-                d=3.5,
-                delta=1,
-                alpha1=0.15,
-                alpha2=0.15,
-                beta1=0.2,
-                beta2=0.2,
-            )
-        else:
-            params = sim.GameParameters(
-                a=a,
-                b=1,
-                c=4,
-                d=6,
-                delta=3,
-                alpha1=0,
-                alpha2=0,
-                beta1=0,
-                beta2=0,
-            )
+    if alt:
+        params = sim.GameParameters(
+            a=a,
+            b=2,
+            c=7,
+            d=3.5,
+            delta=1,
+            alpha1=0.15,
+            alpha2=0.15,
+            beta1=0.2,
+            beta2=0.2,
+        )
+    else:
+        params = sim.GameParameters(
+            a=a,
+            b=1,
+            c=4,
+            d=6,
+            delta=3,
+            alpha1=0,
+            alpha2=0,
+            beta1=0,
+            beta2=0,
+        )
 
-        eq = params.compute_dynamics_params(epsilon=0).make_equation()
-        [h] = plot_cubic_parabola(eq)
-        legend_handles.append(h)
-        legend_labels.append(f'a = {a}')
+    eq = params.compute_dynamics_params(epsilon=0).make_equation()
+    [handle_dy] = plot_cubic_parabola(eq)
+    [handle_integral] = plot_cubic_parabola_integral(eq, dt=dt, offset=offset, invert=invert)
 
-    plt.legend(legend_handles, legend_labels)
+    plt.legend(
+        [handle_dy, handle_integral],
+        [r'$\frac{dy}{dt}$', r'$#\int\frac{dy}{dt}$'.replace('#', '-' if invert else '')],
+    )
+    plt.xlabel(r'$y$')
+    plt.ylabel(r'$\frac{dy}{dt}$', rotation=0)
+    plt.ylim(min_dydt, max_dydt)
     plt.show()
 
 def parse_args() -> Namespace:
@@ -264,18 +289,46 @@ def parse_args() -> Namespace:
 
     sub_ddy = sub.add_parser(
         'ddy',
-        help='Draw plots for the deterministic part of `dy` for different `a`',
+        help='Draw plots for the deterministic part of `dy/dt` and its integral dt',
     )
     sub_ddy.add_argument(
         'a',
         type=float,
-        nargs='+',
-        help='Values for which to draw the plot.',
+        help='Value for which to draw the plot.',
     )
     sub_ddy.add_argument(
         '--alt',
         action='store_true',
         help='Use alternative parameter set',
+    )
+    sub_ddy.add_argument(
+        '--invert',
+        action='store_true',
+        help='Plot sign-inverted integral',
+    )
+    sub_ddy.add_argument(
+        '--dt',
+        type=float,
+        default=0.01,
+        help='Integral scale',
+    )
+    sub_ddy.add_argument(
+        '--offset',
+        type=float,
+        default=2,
+        help='Integral offset',
+    )
+    sub_ddy.add_argument(
+        '--min',
+        type=float,
+        default=-2.5,
+        help='Min dy/dt to draw',
+    )
+    sub_ddy.add_argument(
+        '--max',
+        type=float,
+        default=5.0,
+        help='Max dy/dt to draw',
     )
 
     return ap.parse_args()
@@ -291,7 +344,15 @@ def main() -> None:
             clamp=not args.disable_tight_clamping,
         )
     if args.command == 'ddy':
-        do_ddy_plot(a_values=args.a, alt=args.alt)
+        do_ddy_plot(
+            a=args.a,
+            alt=args.alt,
+            invert=args.invert,
+            dt=args.dt,
+            offset=args.offset,
+            min_dydt=args.min,
+            max_dydt=args.max,
+        )
 
 if __name__ == '__main__':
     main()
